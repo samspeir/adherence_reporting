@@ -4,12 +4,14 @@ import os
 from sqlalchemy import create_engine
 import seaborn as sns
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from matplotlib.patches import Patch
 from datetime import datetime, date, timedelta
 from matplotlib.dates import DateFormatter
 
 
 # MAKE YOUR SELECTIONS HERE
-selected_org = "Clay Health Organization"
+selected_org = "The Workout Company"
 start_date = datetime.strptime('2024-01-01', '%Y-%m-%d')
 end_date = datetime.now()
 
@@ -268,11 +270,20 @@ group_weekly_any_smart_time_percentage = (
     .reset_index(name='any_smart_time_percentage')
 )
 
+# Now we need to count the number of unique users who are being tracked each week
+group_weekly_unique_users = (
+    detailed_adherence_df_results.groupby('week_start_date')
+    .apply(lambda x: x['student_id'].nunique())
+    .reset_index(name='user_count')
+)
+
+
 # Merge the three dataframes on 'week_start_date'
 merged_df = (
     group_weekly_adherence_completed_percentage
     .merge(group_weekly_basic_adherence_completed_percentage, on='week_start_date')
     .merge(group_weekly_any_smart_time_percentage, on='week_start_date')
+    .merge(group_weekly_unique_users, on='week_start_date')
 )
 
 # Melt the dataframe to long format for Seaborn
@@ -291,13 +302,15 @@ metric_labels = {
 }
 melted_df['Metric'] = melted_df['Metric'].map(metric_labels)
 
+
 # Set the aesthetic style of the plots
 sns.set_style("whitegrid")  # Options: darkgrid, whitegrid, dark, white, ticks
-sns.set_context("talk")  # Options: paper, notebook, talk, poster
+sns.set_context("talk")     # Options: paper, notebook, talk, poster
 
 # Create the plot
-plt.figure(figsize=(12, 6))
+fig, ax1 = plt.subplots(figsize=(12, 6))
 
+# Plot the line plots on ax1
 sns.lineplot(
     data=melted_df,
     x='week_start_date',
@@ -306,29 +319,61 @@ sns.lineplot(
     style='Metric',
     markers=True,
     dashes=False,
-    linewidth=2.5
+    linewidth=2.5,
+    ax=ax1
 )
 
-# Customize the plot
-plt.title(f'{selected_org} - Weekly Adherence Metrics Over Time', fontsize=16, fontweight='bold')
-plt.xlabel('Week Start Date', fontsize=14)
-plt.ylabel('Percentage (%)', fontsize=14)
-plt.xticks(rotation=45)
+# Create a twin y-axis for the user count histogram
+ax2 = ax1.twinx()
 
-# rotate the x-axis labels for better readability
-plt.xticks(rotation=45) 
+# Plot the histogram of user_count on ax2
+bars = ax2.bar(
+    merged_df['week_start_date'],
+    merged_df['user_count'],
+    color='lightgray',
+    alpha=0.3,
+    width=6,  # Adjust the width to match the week duration
+    label='User Count'
+)
 
-# Format the x-axis date labels
-date_form = DateFormatter("%Y-%m-%d")
-plt.gca().xaxis.set_major_formatter(date_form)
+# Remove gridlines from ax2
+ax2.grid(False)
 
-plt.legend(title='Metric', fontsize=10, title_fontsize=12, loc='upper left')
+# Set labels
+ax1.set_xlabel('Week Start Date', fontsize=14)
+ax1.set_ylabel('Percentage (%)', fontsize=14)
+ax2.set_ylabel('User Count', fontsize=14)
 
-# Adjust layout to prevent clipping of tick-labels
+# Set the title
+ax1.set_title(f'{selected_org} - Weekly Adherence Metrics Over Time', fontsize=16, fontweight='bold')
+
+# Format the x-axis date labels to show only the first week of each month
+locator = mdates.MonthLocator()
+formatter = mdates.DateFormatter('%Y-%m-%d')
+ax1.xaxis.set_major_locator(locator)
+ax1.xaxis.set_major_formatter(formatter)
+ax1.tick_params(axis='x', rotation=45)
+
+# Adjust gridlines to be less visible on ax1
+ax1.grid(True, which='major', linestyle='--', linewidth=0.5, alpha=0.3)
+
+# Adjust the legend
+# Get the handles and labels from ax1
+handles1, labels1 = ax1.get_legend_handles_labels()
+
+# Create a custom legend handle for the bar chart
+user_count_handle = Patch(facecolor='lightgray', edgecolor='lightgray', alpha=0.3, label='User Count')
+
+# Combine the handles and labels
+handles = handles1 + [user_count_handle]
+labels = labels1 + ['User Count']
+
+# Place the legend outside the plot
+ax1.legend(handles, labels, title='Metric', fontsize=9, title_fontsize=10,
+           loc='upper left', bbox_to_anchor=(1.10, 1), borderaxespad=0., frameon=False)
+
+# Adjust layout to prevent clipping of tick-labels and legend
 plt.tight_layout()
-
-# Add gridlines
-plt.grid(True, which='both', linestyle='--', linewidth=0.5)
 
 # Save and show the plot
 plt.savefig(f'{selected_org} weekly_adherence_metrics.png', dpi=300, bbox_inches='tight')
