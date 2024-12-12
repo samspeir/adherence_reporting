@@ -10,11 +10,6 @@ from datetime import datetime, date, timedelta
 from matplotlib.dates import DateFormatter
 
 
-# MAKE YOUR SELECTIONS HERE
-selected_org = "The Workout Company"
-start_date = datetime.strptime('2024-01-01', '%Y-%m-%d')
-end_date = datetime.now()
-
 # Set up the database connection using SQLAlchemy
 def get_database_engine():
     aws_access_key_id = os.environ["AWS_ACCESS_KEY_ID"]
@@ -67,6 +62,17 @@ org_names = [org_name if org_name is not None else 'Unknown' for org_name in org
 
 org_names = [str(org_name) for org_name in org_names if org_name is not None]
 
+bad_orgs = ["Unknown", 'Deleted users', 'DUMMY Org', 'Elexr Team', 
+         'Test', 'To be deleted']
+
+all_orgs = [org for org in org_names if org not in bad_orgs]
+
+
+# MAKE YOUR SELECTIONS HERE
+selected_org = "The Workout Company"
+start_date = datetime.strptime('2024-01-01', '%Y-%m-%d')
+end_date = datetime.now()
+
 
 # Assuming 'test_date' is the column to determine earliest and latest records
 # Convert 'test_date' to datetime if not already
@@ -77,9 +83,15 @@ first_test_date_df = report_df.sort_values('test_date').groupby('student_id').fi
 first_test_date_df.drop(columns=['rn'], inplace=True)
 first_test_date_df.rename(columns={'test_date': 'first_test_date'}, inplace=True)
 
+print(type(selected_org))
+
 # NOW TO GET THE EXERCISE DATA
 # Step 1: Collect Student IDs and Date Ranges
-user_df = user_df[user_df['org_name'] == selected_org]
+if isinstance(selected_org, str):
+    user_df = user_df[user_df['org_name'] == selected_org]
+else:
+    user_df = user_df[user_df['org_name'].isin(selected_org)]
+
 
 user_df['start_date'] = start_date
 user_df['end_date'] = end_date
@@ -297,8 +309,8 @@ melted_df = merged_df.melt(
 # Map metric names to more readable labels
 metric_labels = {
     'any_smart_time_percentage': 'Any Smart Time',
-    'completed_percentage': 'Completed Personal Adherence Goal',
-    'completed_basic_percentage': 'Completed 90min Adherence Goal'
+    'completed_percentage': 'Completed Custom Goal',
+    'completed_basic_percentage': 'Completed 90min Goal'
 }
 melted_df['Metric'] = melted_df['Metric'].map(metric_labels)
 
@@ -345,7 +357,10 @@ ax1.set_ylabel('Percentage (%)', fontsize=14)
 ax2.set_ylabel('User Count', fontsize=14)
 
 # Set the title
-ax1.set_title(f'{selected_org} - Weekly Adherence Metrics Over Time', fontsize=16, fontweight='bold')
+if selected_org == all_orgs:
+    ax1.set_title('All Organizations - Weekly Adherence Metrics Over Time', fontsize=16, fontweight='bold')
+else:
+    ax1.set_title(f'{selected_org} - Weekly Adherence Metrics Over Time', fontsize=16, fontweight='bold')
 
 # Format the x-axis date labels to show only the first week of each month
 locator = mdates.MonthLocator()
@@ -376,5 +391,11 @@ ax1.legend(handles, labels, title='Metric', fontsize=9, title_fontsize=10,
 plt.tight_layout()
 
 # Save and show the plot
-plt.savefig(f'{selected_org} weekly_adherence_metrics.png', dpi=300, bbox_inches='tight')
+if selected_org == all_orgs:
+    plt.savefig('all orgs weekly_adherence_metrics.png', dpi=300, bbox_inches='tight')
+else:
+    plt.savefig(f'{selected_org} weekly_adherence_metrics.png', dpi=300, bbox_inches='tight')
+
 plt.show()
+
+print(adherence_df['adherence%'].mean())
