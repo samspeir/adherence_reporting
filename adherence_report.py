@@ -69,10 +69,18 @@ all_orgs = [org for org in org_names if org not in bad_orgs]
 
 
 # MAKE YOUR SELECTIONS HERE
-selected_org = "The Workout Company"
+selected_org = all_orgs
 start_date = datetime.strptime('2024-01-01', '%Y-%m-%d')
 end_date = datetime.now()
 
+total_days = (end_date - start_date).days
+remainder = total_days % 7
+
+if remainder != 0:
+    # Adjust end_date so that the difference is divisible by 7.
+    # This will round DOWN to the nearest multiple of 7
+    total_days = total_days - remainder
+    end_date = start_date + timedelta(days=total_days)
 
 # Assuming 'test_date' is the column to determine earliest and latest records
 # Convert 'test_date' to datetime if not already
@@ -147,7 +155,7 @@ exercise_df['start_time'] = pd.to_datetime(exercise_df['start_time'])
 # Add a week number column based on start_time
 exercise_df['week'] = exercise_df['start_time'].dt.isocalendar().week
 
-def calculate_weekly_adherence(sub_df, goal_minutes, days_in_week):
+def calculate_weekly_adherence(sub_df, goal_minutes):
     if sub_df.empty:
         return np.nan
     # Only include "Smart Zone" activities for adherence calculation
@@ -155,9 +163,8 @@ def calculate_weekly_adherence(sub_df, goal_minutes, days_in_week):
     smart_duration_sum = smart_zone_df['smart_duration'].sum() / 60  # Convert seconds to minutes
     
     # Prorate the goal_minutes based on the actual days in the week within the date range
-    total_goal_minutes = (goal_minutes / 7) * days_in_week
-    adherence = (smart_duration_sum / total_goal_minutes) * 100 if total_goal_minutes > 0 else 0
-    basic_adherence = (smart_duration_sum / 90) * 100 if total_goal_minutes > 0 else 0
+    adherence = (smart_duration_sum / goal_minutes) * 100 if goal_minutes > 0 else 0
+    basic_adherence = (smart_duration_sum / 90) * 100 if goal_minutes > 0 else 0
     
     return min(adherence, 100), min(basic_adherence, 100), smart_duration_sum  # Also return smart_duration_sum
 
@@ -168,8 +175,8 @@ def calculate_adherence_for_range_debug(df, start_date, end_date, total_days, st
 
     week_number = 0  # Initialize week number
     current_week_start = start_date
-    while current_week_start <= end_date:
-        current_week_end = min(current_week_start + timedelta(days=6), end_date)
+    while current_week_start <= (end_date - timedelta(days=1)):
+        current_week_end = current_week_start + timedelta(days=6)
         current_week_start = pd.to_datetime(current_week_start)
         current_week_end = pd.to_datetime(current_week_end)
         week_df = df[(df['start_time'] >= current_week_start) & (df['start_time'] <= current_week_end)]
@@ -180,7 +187,7 @@ def calculate_adherence_for_range_debug(df, start_date, end_date, total_days, st
         # Check if there's activity data for the week; if not, default values to 0
         if not week_df.empty:
             goal_minutes = week_df.iloc[0]['goal_minutes']
-            week_adherence, basic_week_adherence, smart_duration_sum = calculate_weekly_adherence(week_df, goal_minutes, days_in_week)
+            week_adherence, basic_week_adherence, smart_duration_sum = calculate_weekly_adherence(week_df, goal_minutes)
         else:
             goal_minutes = 0  # Default to 0 or use a predefined goal if applicable
             week_adherence, basic_week_adherence, smart_duration_sum = 0, 0, 0
@@ -398,4 +405,4 @@ else:
 
 plt.show()
 
-print(adherence_df['adherence%'].mean())
+#print(adherence_df['adherence%'].mean())
